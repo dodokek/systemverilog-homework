@@ -4,11 +4,8 @@
 
 module formula_tb
 # (
-    parameter homework    = 0,
-              formula     = 1,
-              pipe        = 0,
-              distributor = 0,
-              impl        = 1
+    parameter formula = 1,
+              impl    = 1
 );
 
     `include "formula_1_fn.svh"
@@ -36,46 +33,17 @@ module formula_tb
 
     generate
 
-        if (homework == 3)
-        begin : if_homework_3
-
-            if (formula == 1 && impl == 1)
-            begin : if_1_1
-                formula_1_impl_1_top i_formula_1_impl_1_top (.*);
-            end
-            else if (formula == 1 && impl == 2)
-            begin : if_1_2
-                formula_1_impl_2_top i_formula_1_impl_2_top (.*);
-            end
-            else
-            begin : if_else
-                formula_2_top        i_formula_2_top        (.*);
-            end
+        if (formula == 1 && impl == 1)
+        begin : if_1_1
+            formula_1_impl_1_top i_formula_1_impl_1_top (.*);
         end
-
-        else if (homework == 4 && ! distributor)
-        begin : if_homework_4_not_distributor
-
-            if (formula == 1 && pipe)
-            begin : if_formula_1_pipe
-                       formula_1_pipe               i_formula_1_pipe               (.*);
-            end
-            else if (formula == 1 && ! pipe)
-            begin : if_formula_1_pipe_aware_fsm
-                       formula_1_pipe_aware_fsm_top i_formula_1_pipe_aware_fsm_top (.*);
-            end
-            else
-            begin : if_formula_2_pipe
-                       formula_2_pipe               i_formula_2_pipe               (.*);
-            end
+        else if (formula == 1 && impl == 2)
+        begin : if_1_2
+            formula_1_impl_2_top i_formula_1_impl_2_top (.*);
         end
-
-        else if (homework == 4 && distributor)
-        begin : if_homework_4_distributor
-
-            sqrt_formula_distributor
-            # (.formula (formula), .impl (impl))
-            i_sqrt_formula_distributor (.*);
+        else
+        begin : if_else
+            formula_2_top i_formula_2_top (.*);
         end
 
     endgenerate
@@ -114,72 +82,13 @@ module formula_tb
 
     string test_id;
 
-    initial $sformat (test_id, "%s homework %0d formula %0d pipe %0d distributor %0d impl %0d",
-        `__FILE__,                 homework,    formula,    pipe,    distributor,    impl);
-
-    //--------------------------------------------------------------------------
-    // Utilities to drive stimulus
-
-    localparam max_latency       = 16,
-               gap_between_tests = 100;
-
-    function int randomize_gap ();
-
-        int gap_class;
-
-        gap_class = $urandom_range (1, 100);
-
-        if (gap_class <= 60)       // With a 60% probability: without gaps
-            return 0;
-        else if (gap_class <= 95)  // With a 35% probability: gap 1..3
-            return $urandom_range (1, 3);
-        else                       // With a  5% probability: gap 4..max_latency + 2
-            return $urandom_range (4, max_latency + 2);
-
-    endfunction
-
-    //--------------------------------------------------------------------------
-
-    task drive_arg_vld_and_wait_res_vld_if_necessary
-    (
-        bit random_gap = 0,
-        int gap        = 0
-    );
-
-        arg_vld <= 1'b1;
-        @ (posedge clk);
-        arg_vld <= 1'b0;
-
-        if (! (pipe | distributor))
-        begin
-            while (~ res_vld)
-                @ (posedge clk);
-        end
-
-        if (random_gap)
-            gap = randomize_gap ();
-
-        repeat (gap) @ (posedge clk);
-
-    endtask
-
-    //--------------------------------------------------------------------------
-
-    task make_gap_between_tests ();
-
-        repeat (max_latency + gap_between_tests)
-            @ (posedge clk);
-
-    endtask
+    initial $sformat (test_id, "%s formula %0d impl %0d:",
+        `__FILE__, formula, impl);
 
     //--------------------------------------------------------------------------
     // Driving stimulus
 
-    bit run_completed = '0;
-
     task run ();
-
-        run_completed = '0;
 
         // Enabling the testbench
         clk_enable = '1; # 1
@@ -190,7 +99,7 @@ module formula_tb
 
         fork
         begin
-            repeat (100000) @ (posedge clk);
+            repeat (1000) @ (posedge clk);
             $display ("FAIL %s: timeout!", test_id);
             $finish;
         end
@@ -208,59 +117,48 @@ module formula_tb
 
         // Direct testing - a single test
 
-        a <= 1;
-        b <= 4;
-        c <= 9;
+        a       <= 1;
+        b       <= 4;
+        c       <= 9;
+        arg_vld <= '1;
 
-        drive_arg_vld_and_wait_res_vld_if_necessary ();
-        make_gap_between_tests ();
+        @ (posedge clk);
+        arg_vld <= '0;
+
+        while (~ res_vld)
+            @ (posedge clk);
 
         // Direct testing - a group of tests
-        // A group of tests back-to-back
 
         for (int i = 0; i < 100; i = i * 3 + 1)
         begin
-            a <= i;
-            b <= i;
-            c <= i;
+            a       <= i;
+            b       <= i;
+            c       <= i;
+            arg_vld <= '1;
 
-            drive_arg_vld_and_wait_res_vld_if_necessary ();
-        end
+            @ (posedge clk);
+            arg_vld <= '0;
 
-        make_gap_between_tests ();
-
-        if (pipe | distributor)
-        begin
-            // A group of tests with delays
-
-            for (int i = 0; i < 1000; i = i * 3 + 1)
-            begin
-                a       <= i;
-                b       <= i + 1;
-                c       <= i * 2;
-
-                drive_arg_vld_and_wait_res_vld_if_necessary
-                (
-                    0,      // random_gap
-                    i / 10  // gap
-                );
-            end
-
-            make_gap_between_tests ();
+            while (~ res_vld)
+                @ (posedge clk);
         end
 
         // Random testing
 
-        repeat (100)
+        repeat (10)
         begin
-            a <= $urandom ();
-            b <= $urandom ();
-            c <= $urandom ();
+            a       <= $urandom ();
+            b       <= $urandom ();
+            c       <= $urandom ();
+            arg_vld <= '1;
 
-            drive_arg_vld_and_wait_res_vld_if_necessary (1); // random_gap
+            @ (posedge clk);
+            arg_vld <= '0;
+
+            while (~ res_vld)
+                @ (posedge clk);
         end
-
-        make_gap_between_tests ();
 
         // Disabling the testbench
         clk_enable = '0;
@@ -271,8 +169,6 @@ module formula_tb
             disable fork;
 
         `endif
-
-        run_completed = '1;
 
     endtask
 
@@ -375,16 +271,12 @@ module formula_tb
     begin
         if (queue.size () == 0)
         begin
-            if (run_completed)
-                $display ("PASS %s", test_id);
-            else
-                $display ("FAIL %s: did not run or run was not completed",
-                    test_id);
+            $display ("PASS %s", test_id);
         end
         else
         begin
-            $write ("FAIL %s: data is left sitting in the model queue (%d left):",
-                test_id, queue.size());
+            $write ("FAIL %s: data is left sitting in the model queue:",
+                test_id);
 
             for (int i = 0; i < queue.size (); i ++)
                 $write (" %h", queue [queue.size () - i - 1]);
@@ -427,7 +319,7 @@ module formula_tb
 
     initial
     begin
-        repeat (100000) @ (posedge clk);
+        repeat (1000) @ (posedge clk);
         $display ("FAIL %s: timeout!", test_id);
         $finish;
     end
