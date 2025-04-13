@@ -58,22 +58,74 @@ endmodule
 
 module serial_divisibility_by_5_using_fsm
 (
-  input  clk,
-  input  rst,
-  input  new_bit,
-  output div_by_5
+    input  clk,
+    input  rst,
+    input  new_bit,
+    output logic div_by_5
 );
 
-  // Implement a module that performs a serial test if input number is divisible by 5.
-  //
-  // On each clock cycle, module receives the next 1 bit of the input number.
-  // The module should set output to 1 if the currently known number is divisible by 5.
-  //
-  // Hint: new bit is coming to the right side of the long binary number `X`.
-  // It is similar to the multiplication of the number by 2*X or by 2*X + 1.
-  //
-  // Hint 2: As we are interested only in the remainder, all operations are performed under the modulo 5 (% 5).
-  // Check manually how the remainder changes under such modulo.
+    typedef enum logic[2:0]
+    {
+        ST_MOD_0 = 3'b000,
+        ST_MOD_1 = 3'b001,
+        ST_MOD_2 = 3'b010,
+        ST_MOD_3 = 3'b011,
+        ST_MOD_4 = 3'b100
+    } state_t;
 
+    state_t cur_state, next_state;
+
+    // State transition logic
+    always_comb begin
+        case (cur_state)
+            ST_MOD_0: begin
+                if (new_bit)
+                    next_state = ST_MOD_1;
+                else
+                    next_state = ST_MOD_0;
+            end
+
+            ST_MOD_1: begin
+                if (new_bit)
+                    next_state = ST_MOD_3;
+                else
+                    next_state = ST_MOD_2;
+            end
+
+            ST_MOD_2: begin
+                if (new_bit)
+                    next_state = ST_MOD_0;
+                else
+                    next_state = ST_MOD_4;
+            end
+
+            ST_MOD_3: begin
+                if (new_bit)
+                    next_state = ST_MOD_2;
+                else
+                    next_state = ST_MOD_1;
+            end
+
+            ST_MOD_4: begin
+                if (new_bit)
+                    next_state = ST_MOD_4;
+                else
+                    next_state = ST_MOD_3;
+            end
+
+            default: next_state = ST_MOD_0;
+        endcase
+    end
+
+    // Output logic
+    assign div_by_5 = (cur_state == ST_MOD_0);
+
+    // State update
+    always_ff @(posedge clk) begin
+        if (rst)
+            cur_state <= ST_MOD_0;
+        else
+            cur_state <= next_state;
+    end
 
 endmodule
