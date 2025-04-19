@@ -43,5 +43,108 @@ module sqrt_formula_distributor
     // Instantiate sufficient number of "formula_1_impl_1_top", "formula_1_impl_2_top",
     // or "formula_2_top" modules to achieve desired performance.
 
+    localparam N = 5;
+    parameter LATENCY = 50;
+
+    logic [N-1:0] busy;
+    logic [N-1:0] vld_in;
+    logic [N-1:0] res_vld_arr;
+    logic [31:0]  res_arr [N-1:0];
+    logic [$clog2(LATENCY+1)-1:0] counters [N-1:0];
+
+    logic [$clog2(N)-1:0] dispatcher;
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            dispatcher <= 0;
+            vld_in     <= '0;
+        end else begin
+            vld_in <= '0;
+            if (arg_vld) begin
+                for (int i = 0; i < N; i++) begin
+                    if (!busy[dispatcher]) begin
+                        vld_in[dispatcher]   <= 1;
+                        busy[dispatcher]     <= 1;
+                        counters[dispatcher] <= 1;
+                        dispatcher <= (dispatcher + 1) % N;
+                        break;
+                    end else begin
+                        dispatcher <= (dispatcher + 1) % N;
+                    end
+                end
+            end
+        end
+    end
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            for (int i = 0; i < N; i++) begin
+                counters[i] <= 0;
+            end
+        end else begin
+            for (int i = 0; i < N; i++) begin
+                if (busy[i] && counters[i] < LATENCY)
+                    counters[i] <= counters[i] + 1;
+            end
+        end
+    end
+
+    genvar i;
+    generate
+        for (i = 0; i < N; i++) begin : compute_units
+            if (formula == 1 && impl == 1) begin
+                formula_1_impl_1_top u_f1_i1 (
+                    .clk(clk),
+                    .rst(rst),
+                    .arg_vld(vld_in[i]),
+                    .a(a),
+                    .b(b),
+                    .c(c),
+                    .res_vld(res_vld_arr[i]),
+                    .res(res_arr[i])
+                );
+            end else if (formula == 1 && impl == 2) begin
+                formula_1_impl_2_top u_f1_i2 (
+                    .clk(clk),
+                    .rst(rst),
+                    .arg_vld(vld_in[i]),
+                    .a(a),
+                    .b(b),
+                    .c(c),
+                    .res_vld(res_vld_arr[i]),
+                    .res(res_arr[i])
+                );
+            end else begin
+                formula_2_top u_f2 (
+                    .clk(clk),
+                    .rst(rst),
+                    .arg_vld(vld_in[i]),
+                    .a(a),
+                    .b(b),
+                    .c(c),
+                    .res_vld(res_vld_arr[i]),
+                    .res(res_arr[i])
+                );
+            end
+
+            always_ff @(posedge clk or posedge rst) begin
+                if (rst) begin
+                    busy[i]     <= 0;
+                    counters[i] <= 0;
+                end else if (res_vld_arr[i]) begin
+                    busy[i]     <= 0;
+                    counters[i] <= 0;
+                end
+            end
+        end
+    endgenerate
+
+    assign res_vld = | res_vld_arr;
+    assign res = (res_vld_arr[0] && counters[0] == LATENCY) ? res_arr[0] :
+                (res_vld_arr[1] && counters[1] == LATENCY) ? res_arr[1] :
+                (res_vld_arr[2] && counters[2] == LATENCY) ? res_arr[2] :
+                (res_vld_arr[3] && counters[3] == LATENCY) ? res_arr[3] :
+                (res_vld_arr[4] && counters[4] == LATENCY) ? res_arr[4] : 32'b0;
+
 
 endmodule
