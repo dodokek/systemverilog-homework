@@ -30,5 +30,46 @@ module float_discriminant (
     // The FLEN parameter is defined in the "import/preprocessed/cvw/config-shared.vh" file
     // and usually equal to the bit width of the double-precision floating-point number, FP64, 64 bits.
 
+    real a_real, b_real, c_real, result;
+
+    function logic is_nan(input real x);
+        return x != x;
+    endfunction
+
+    function logic is_inf(input real x);
+        return x == 1.0/0.0 || x == -1.0/0.0;
+    endfunction
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            res_vld       <= 0;
+            err           <= 0;
+            res           <= 0;
+            res_negative  <= 0;
+            busy          <= 0;
+        end else begin
+            if (arg_vld) begin
+                busy <= 1;
+
+                a_real = $bitstoreal(a);
+                b_real = $bitstoreal(b);
+                c_real = $bitstoreal(c);
+
+                err <= is_nan(a_real) || is_nan(b_real) || is_nan(c_real) ||
+                       is_inf(a_real) || is_inf(b_real) || is_inf(c_real);
+
+                // Discriminant calculations.
+                result = b_real * b_real - 4.0 * a_real * c_real;
+                res <= $realtobits(result);
+
+                res_negative <= (result < 0.0);
+                res_vld <= 1;
+
+                busy <= 0;
+            end else begin
+                res_vld <= 0;
+            end
+        end
+    end
 
 endmodule

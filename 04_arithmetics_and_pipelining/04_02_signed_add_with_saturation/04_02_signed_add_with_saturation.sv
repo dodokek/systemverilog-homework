@@ -36,5 +36,13 @@ module signed_add_with_saturation
   // and the arguments are negative,
   // the sum should be set to the minimum negative number.
 
+  logic signed [3:0] signed_a, signed_b;
+  logic signed [4:0] full_sum;
+
+  assign signed_a = a;
+  assign signed_b = b;
+  assign full_sum = signed_a + signed_b;
+
+  assign sum = (full_sum > 7) ? 4'sd7 : (full_sum < -8 ? -4'sd8 : full_sum[3:0]);
 
 endmodule
