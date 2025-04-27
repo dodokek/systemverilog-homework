@@ -2,7 +2,8 @@
 // Task
 //----------------------------------------------------------------------------
 
-module formula_1_impl_2_fsm (
+module formula_1_impl_2_fsm
+(
     input               clk,
     input               rst,
 
@@ -15,13 +16,16 @@ module formula_1_impl_2_fsm (
     output logic [31:0] res,
 
     // isqrt interface
+
     output logic        isqrt_1_x_vld,
     output logic [31:0] isqrt_1_x,
+
     input               isqrt_1_y_vld,
     input        [15:0] isqrt_1_y,
 
     output logic        isqrt_2_x_vld,
     output logic [31:0] isqrt_2_x,
+
     input               isqrt_2_y_vld,
     input        [15:0] isqrt_2_y
 );
@@ -38,20 +42,21 @@ module formula_1_impl_2_fsm (
     // You can download this issue from https://fpga-systems.ru/fsm
 
     enum logic [2:0] {
-        ST_IDLE,
-        ST_SEND_AB,
-        ST_WAIT_AB,
-        ST_SEND_C,
-        ST_WAIT_C,
-        ST_DONE
+        IDLE,
+        SEND_AB,
+        WAIT_AB,
+        SEND_C,
+        WAIT_C,
+        DONE
     } 
-    cur_state, nxt_state;
+    state, new_state;
 
-    logic [31:0] reg_a, reg_b, reg_c;
-    logic [15:0] sqrt_a, sqrt_b, sqrt_c;
+    logic [31:0] a_reg,  b_reg,  c_reg;
+    logic [15:0] a_sqrt, b_sqrt, c_sqrt;
 
-    always_comb begin
-        nxt_state = cur_state;
+    always_comb 
+    begin
+        new_state = state;
 
         res_vld = 0;
         res = 0;
@@ -60,62 +65,69 @@ module formula_1_impl_2_fsm (
         isqrt_1_x = 0;
         isqrt_2_x = 0;
 
-        case (cur_state)
-            ST_IDLE:
-                if (arg_vld)
-                    nxt_state = ST_SEND_AB;
+        case (state)
+            IDLE: 
+                if (arg_vld) 
+                    new_state = SEND_AB;
 
-            ST_SEND_AB: begin
+            SEND_AB: 
+            begin
                 isqrt_1_x_vld = 1;
-                isqrt_1_x     = reg_a;
+                isqrt_1_x = a_reg;
                 isqrt_2_x_vld = 1;
-                isqrt_2_x     = reg_b;
-                nxt_state     = ST_WAIT_AB;
+                isqrt_2_x = b_reg;
+                new_state = WAIT_AB;
             end
 
-            ST_WAIT_AB:
-                if (isqrt_1_y_vld && isqrt_2_y_vld)
-                    nxt_state = ST_SEND_C;
+            WAIT_AB: 
+                if (isqrt_1_y_vld && isqrt_2_y_vld) 
+                    new_state = SEND_C;
 
-            ST_SEND_C: begin
+            SEND_C: 
+            begin
                 isqrt_1_x_vld = 1;
-                isqrt_1_x     = reg_c;
-                nxt_state     = ST_WAIT_C;
+                isqrt_1_x = c_reg;
+                new_state = WAIT_C;
             end
 
-            ST_WAIT_C:
-                if (isqrt_1_y_vld)
-                    nxt_state = ST_DONE;
+            WAIT_C: 
+                if (isqrt_1_y_vld) 
+                    new_state = DONE;
 
-            ST_DONE: begin
+            DONE: 
+            begin
                 res_vld = 1;
-                res     = sqrt_a + sqrt_b + sqrt_c;
-                nxt_state = ST_IDLE;
+                res = a_sqrt + b_sqrt + c_sqrt;
+                new_state = IDLE;
             end
         endcase
     end
 
-    always_ff @(posedge clk) begin
+
+    always_ff @(posedge clk) 
+    begin
         if (rst)
-            cur_state <= ST_IDLE;
+            state <= IDLE;
         else
-            cur_state <= nxt_state;
+            state <= new_state;
 
-        if (arg_vld && cur_state == ST_IDLE) begin
-            reg_a <= a;
-            reg_b <= b;
-            reg_c <= c;
+        if (arg_vld && state == IDLE) 
+        begin
+            a_reg <= a;
+            b_reg <= b;
+            c_reg <= c;
         end
 
-        if (cur_state == ST_WAIT_AB) begin
-            if (isqrt_1_y_vld)
-                sqrt_a <= isqrt_1_y;
-            if (isqrt_2_y_vld)
-                sqrt_b <= isqrt_2_y;
+        if (state == WAIT_AB) 
+        begin
+            if (isqrt_1_y_vld) 
+                a_sqrt <= isqrt_1_y;
+            if (isqrt_2_y_vld) 
+                b_sqrt <= isqrt_2_y;
         end
 
-        if (cur_state == ST_WAIT_C && isqrt_1_y_vld)
-            sqrt_c <= isqrt_1_y;
+        if (state == WAIT_C && isqrt_1_y_vld) 
+            c_sqrt <= isqrt_1_y;
     end
 
 endmodule

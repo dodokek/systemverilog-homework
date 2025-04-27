@@ -42,67 +42,43 @@ module formula_1_pipe
     // FPGA-Systems Magazine :: FSM :: Issue ALFA (state_0)
     // You can download this issue from https://fpga-systems.ru/fsm#state_0
 
-    logic [31:0] sqrt_a, sqrt_b, sqrt_c;
     logic isqrt_vld_a, isqrt_vld_b, isqrt_vld_c;
+    logic [31:0] isqrt_a;
+    logic [31:0] isqrt_b;
+    logic [31:0] isqrt_c;
 
-    logic [31:0] res_stage_1, res_stage_2;
-    logic res_vld_stage_1, res_vld_stage_2;
-
-    isqrt #(.n_pipe_stages(4)) dd_isqrt_a
+    isqrt dd_isqrt_a
     (
-        .clk(clk),
-        .rst(rst),
-        .x_vld(arg_vld),
-        .x(a),
-        .y_vld(isqrt_vld_a),
-        .y(sqrt_a)
+        .clk    (clk),
+        .rst    (rst),
+        .x_vld  (arg_vld),
+        .x      (a),
+        .y_vld  (isqrt_vld_a),
+        .y      (isqrt_a)
     );
 
-    isqrt #(.n_pipe_stages(4)) dd_isqrt_b
+    isqrt dd_isqrt_b
     (
-        .clk(clk),
-        .rst(rst),
-        .x_vld(arg_vld),
-        .x(b),
-        .y_vld(isqrt_vld_b),
-        .y(sqrt_b)
+        .clk    (clk),
+        .rst    (rst),
+        .x_vld  (arg_vld),
+        .x      (b),
+        .y_vld  (isqrt_vld_b),
+        .y      (isqrt_b)
+    );
+    
+    isqrt dd_isqrt_c
+    (
+        .clk    (clk),
+        .rst    (rst),
+        .x_vld  (arg_vld),
+        .x      (c),
+        .y_vld  (isqrt_vld_c),
+        .y      (isqrt_c)
     );
 
-    isqrt #(.n_pipe_stages(4)) dd_isqrt_c
-    (
-        .clk(clk),
-        .rst(rst),
-        .x_vld(arg_vld),
-        .x(c),
-        .y_vld(isqrt_vld_c),
-        .y(sqrt_c)
-    );
+    assign res_vld = (isqrt_vld_a) ? 1'b1 : 1'b0;
+    assign res     = (isqrt_vld_a) ? isqrt_a + isqrt_b + isqrt_c : res;
 
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            res_stage_1 <= 32'b0;
-            res_vld_stage_1 <= 1'b0;
-        end else begin
-            if (isqrt_vld_a && isqrt_vld_b && isqrt_vld_c) begin
-                res_stage_1 <= sqrt_a + sqrt_b + sqrt_c;
-                res_vld_stage_1 <= 1'b1;
-            end else begin
-                res_vld_stage_1 <= 1'b0;
-            end
-        end
-    end
-
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            res_stage_2 <= 32'b0;
-            res_vld_stage_2 <= 1'b0;
-        end else begin
-            res_stage_2 <= res_stage_1;
-            res_vld_stage_2 <= res_vld_stage_1;
-        end
-    end
-
-    assign res = res_stage_2;
-    assign res_vld = res_vld_stage_2;
 
 endmodule

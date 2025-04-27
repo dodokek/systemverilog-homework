@@ -61,125 +61,94 @@ module formula_1_pipe_aware_fsm
     // FPGA-Systems Magazine :: FSM :: Issue ALFA (state_0)
     // You can download this issue from https://fpga-systems.ru/fsm#state_0
 
-    typedef enum logic [1:0] {
-        ST_IDLE,
-        ST_A,
-        ST_B,
-        ST_C
-    } fsm_t;
+    // Состояния FSM
+    typedef enum logic [2:0] {
+        IDLE,       
+        SEND_A,     
+        SEND_B,     
+        SEND_C,     
+        COLLECT,    
+        OUTPUT      
+    } state_t;
 
-    fsm_t st_cur, st_nxt;
+    state_t state, next_state;
 
-    logic [15:0] val_a, val_b, val_c;
-    logic        val_a_ok, val_b_ok, val_c_ok;
-
-    logic [31:0] ab_sum, abc_sum;
-    logic        ab_ok, abc_ok;
-
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            st_cur <= ST_IDLE;
-        end else begin
-            st_cur <= st_nxt;
-        end
-    end
+    logic [31:0] sqrt_a, sqrt_b; 
+    logic [1:0] collect_count;   
 
     always_comb begin
-        st_nxt = st_cur;
+        next_state = state;
         isqrt_x_vld = 1'b0;
-        isqrt_x = '0;
+        isqrt_x = 32'b0;
+        res_vld = 1'b0;
 
-        case (st_cur)
-            ST_IDLE: begin
+        case (state)
+            IDLE: begin
                 if (arg_vld) begin
-                    st_nxt = ST_A;
+                    next_state = SEND_A;
                     isqrt_x_vld = 1'b1;
                     isqrt_x = a;
                 end
             end
 
-            ST_A: begin
+            SEND_A: begin
+                next_state = SEND_B;
                 isqrt_x_vld = 1'b1;
                 isqrt_x = b;
-                st_nxt = ST_B;
             end
 
-            ST_B: begin
+            SEND_B: begin
+                next_state = SEND_C;
                 isqrt_x_vld = 1'b1;
                 isqrt_x = c;
-                st_nxt = ST_C;
             end
 
-            ST_C: begin
-                if (arg_vld) begin
-                    st_nxt = ST_A;
-                    isqrt_x_vld = 1'b1;
-                    isqrt_x = a;
-                end else begin
-                    st_nxt = ST_IDLE;
+            SEND_C: begin
+                next_state = COLLECT;
+            end
+
+            COLLECT: begin
+                if (isqrt_y_vld && collect_count == 2) begin
+                    next_state = OUTPUT;
                 end
             end
+
+            OUTPUT: begin
+                res_vld = 1'b1;
+                next_state = IDLE;
+            end
+
+            default: next_state = IDLE;
         endcase
     end
 
-    always_ff @(posedge clk or posedge rst) begin
+    always_ff @(posedge clk) 
+    begin
         if (rst) begin
-            val_a <= '0;
-            val_b <= '0;
-            val_c <= '0;
-            val_a_ok <= 1'b0;
-            val_b_ok <= 1'b0;
-            val_c_ok <= 1'b0;
-        end else begin
+            state <= IDLE;
+            sqrt_a <= 32'b0;
+            sqrt_b <= 32'b0;
+            collect_count <= 2'b0;
+            res <= 32'b0;
+        end 
+        else begin
+            state <= next_state;
+
             if (isqrt_y_vld) begin
-                case (st_cur)
-                    ST_A: begin
-                        val_a <= isqrt_y;
-                        val_a_ok <= 1'b1;
-                    end
-                    ST_B: begin
-                        val_b <= isqrt_y;
-                        val_b_ok <= 1'b1;
-                    end
-                    ST_C: begin
-                        val_c <= isqrt_y;
-                        val_c_ok <= 1'b1;
-                    end
-                    default: begin
-                        val_a_ok <= 1'b0;
-                        val_b_ok <= 1'b0;
-                        val_c_ok <= 1'b0;
-                    end
+                case (collect_count)
+                    2'd0: sqrt_a <= {16'b0, isqrt_y}; // isqrt(a)
+                    2'd1: sqrt_b <= {16'b0, isqrt_y}; // isqrt(b)
+                    2'd2: res <= sqrt_a + sqrt_b + {16'b0, isqrt_y}; // isqrt(a) + isqrt(b) + isqrt(c)
                 endcase
+
+                collect_count <= collect_count + 1;
+            end
+
+            if (state == OUTPUT) begin
+                collect_count <= 2'b0;
             end
         end
     end
 
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            ab_sum <= '0;
-            abc_sum <= '0;
-            ab_ok <= 1'b0;
-            abc_ok <= 1'b0;
-            res <= '0;
-            res_vld <= 1'b0;
-        end else begin
-            ab_ok <= 1'b0;
-            abc_ok <= 1'b0;
-
-            if (val_a_ok && val_b_ok) begin
-                ab_sum <= val_a + val_b;
-                ab_ok <= 1'b1;
-            end
-
-            if (ab_ok && val_c_ok) begin
-                abc_sum <= ab_sum + val_c;
-                abc_ok <= 1'b1;
-            end
-
-            res <= abc_sum;
-            res_vld <= abc_ok;
-        end
-    end
 
 endmodule

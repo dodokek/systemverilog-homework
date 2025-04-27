@@ -2,7 +2,8 @@
 // Task
 //----------------------------------------------------------------------------
 
-module formula_2_fsm (
+module formula_2_fsm
+(
     input               clk,
     input               rst,
 
@@ -15,12 +16,13 @@ module formula_2_fsm (
     output logic [31:0] res,
 
     // isqrt interface
+
     output logic        isqrt_x_vld,
     output logic [31:0] isqrt_x,
+
     input               isqrt_y_vld,
     input        [15:0] isqrt_y
 );
-
     // Task:
     // Implement a module that calculates the formula from the `formula_2_fn.svh` file
     // using only one instance of the isqrt module.
@@ -33,90 +35,104 @@ module formula_2_fsm (
     // You can download this issue from https://fpga-systems.ru/fsm
 
     enum logic [2:0] {
-        ST_IDLE,
-        ST_SEND_C,
-        ST_WAIT_C,
-        ST_SEND_B,
-        ST_WAIT_B,
-        ST_SEND_A,
-        ST_WAIT_A,
-        ST_DONE
-    } 
-    cur_state, next_state;
+        IDLE,
+        SEND_C,
+        WAIT_C,
+        SEND_B,
+        WAIT_B,
+        SEND_A,
+        WAIT_A,
+        DONE
+    }
+    state, next;
 
-    logic [31:0] reg_a, reg_b, reg_c;
-    logic [31:0] sum_bc, sum_abc;
+    logic [31:0] a_reg, b_reg, c_reg;
+    logic [31:0] bc_sum;
+    logic [31:0] abc_sum;
 
-    always_comb begin
-        next_state = cur_state;
+    always_comb 
+    begin
+        next = state;
 
         res_vld = 0;
         res = 0;
         isqrt_x_vld = 0;
         isqrt_x = 0;
 
-        case (cur_state)
-            ST_IDLE:
-                if (arg_vld)
-                    next_state = ST_SEND_C;
+        case (state)
+            IDLE: 
+                if (arg_vld) 
+                    next = SEND_C;
 
-            ST_SEND_C: begin
+            SEND_C: 
+            begin
                 isqrt_x_vld = 1;
-                isqrt_x     = reg_c;
-                next_state  = ST_WAIT_C;
+                isqrt_x = c_reg;
+                next = WAIT_C;
             end
 
-            ST_WAIT_C:
-                if (isqrt_y_vld)
-                    next_state = ST_SEND_B;
+            WAIT_C: 
+                if (isqrt_y_vld) 
+                    next = SEND_B;
 
-            ST_SEND_B: begin
+            SEND_B: 
+            begin
                 isqrt_x_vld = 1;
-                isqrt_x     = sum_bc;
-                next_state  = ST_WAIT_B;
+                isqrt_x = bc_sum;
+                next = WAIT_B;
             end
 
-            ST_WAIT_B:
-                if (isqrt_y_vld)
-                    next_state = ST_SEND_A;
+            WAIT_B: 
+                if (isqrt_y_vld) 
+                    next = SEND_A;
 
-            ST_SEND_A: begin
+            SEND_A: 
+            begin
                 isqrt_x_vld = 1;
-                isqrt_x     = sum_abc;
-                next_state  = ST_WAIT_A;
+                isqrt_x = abc_sum;
+                next = WAIT_A;
             end
 
-            ST_WAIT_A:
-                if (isqrt_y_vld)
-                    next_state = ST_DONE;
+            WAIT_A: 
+                if (isqrt_y_vld) 
+                    next = DONE;
 
-            ST_DONE: begin
-                res_vld    = 1;
-                res        = isqrt_y;
-                next_state = ST_IDLE;
+            DONE: 
+            begin
+                res_vld = 1;
+                res = isqrt_y;
+                next = IDLE;
             end
         endcase
     end
 
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clk) 
+    begin
         if (rst)
-            cur_state <= ST_IDLE;
+            state <= IDLE;
         else
-            cur_state <= next_state;
+            state <= next;
     end
 
-    always_ff @(posedge clk) begin
-        if (cur_state == ST_IDLE && arg_vld) begin
-            reg_a <= a;
-            reg_b <= b;
-            reg_c <= c;
+    always_ff @(posedge clk) 
+    begin
+        if (state == IDLE && arg_vld) 
+        begin
+            a_reg <= a;
+            b_reg <= b;
+            c_reg <= c;
         end
 
-        if (cur_state == ST_WAIT_C && isqrt_y_vld)
-            sum_bc <= reg_b + isqrt_y;
+        if (state == WAIT_C && isqrt_y_vld) 
+        begin
+            bc_sum <= b_reg + isqrt_y;
+        end
 
-        if (cur_state == ST_WAIT_B && isqrt_y_vld)
-            sum_abc <= reg_a + isqrt_y;
+        if (state == WAIT_B && isqrt_y_vld) 
+        begin
+            abc_sum <= a_reg + isqrt_y;
+        end
     end
+
 
 endmodule
